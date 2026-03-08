@@ -1,136 +1,225 @@
-import React from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-} from 'react-native';
-import { useSelector } from 'react-redux';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
+import { useSelector, useDispatch } from 'react-redux';
+import { fetchNearbyPharmacies } from '../../redux/slices/pharmacySlice';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 
+const MapScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const { nearbyPharmacies } = useSelector((state) => state.pharmacy);
+  const dispatch = useDispatch();
+  const [userLocation, setUserLocation] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const webViewRef = useRef(null);
 
-const MapScreen = () => {
-  const { colors, isDark } = useTheme();
-  const { nearbyPharmacies } = useSelector(s => s.pharmacy);
-  const s = makeStyles(colors, isDark);
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        // Fallback to a default location (e.g., Bangalore)
+        setUserLocation({ latitude: 12.9716, longitude: 77.5946 });
+        setLoading(false);
+        return;
+      }
 
-  const pharmacies = nearbyPharmacies || [];
+      let location = await Location.getCurrentPositionAsync({});
+      setUserLocation(location.coords);
+      
+      // Fetch nearby pharmacies
+      dispatch(fetchNearbyPharmacies({
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+        maxDistance: 10
+      }));
+      
+      setLoading(false);
+    })();
+  }, [dispatch]);
+
+  const mapHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          body { margin: 0; padding: 0; }
+          #map { height: 100vh; width: 100vw; }
+          .custom-popup .leaflet-popup-content-wrapper {
+            background: #fff;
+            color: #333;
+            border-radius: 12px;
+            padding: 5px;
+          }
+          .custom-popup .leaflet-popup-tip {
+            background: #fff;
+          }
+          .pharmacy-name {
+            font-weight: bold;
+            font-family: sans-serif;
+            margin-bottom: 5px;
+            font-size: 14px;
+          }
+          .view-btn {
+            background: #2D31A6;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 12px;
+            margin-top: 5px;
+          }
+          .status-dot {
+            height: 10px;
+            width: 10px;
+            background-color: #10B981;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          const map = L.map('map', { zoomControl: false }).setView([${userLocation?.latitude || 12.9716}, ${userLocation?.longitude || 77.5946}], 15);
+          
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+          }).addTo(map);
+
+          // User marker
+          L.circleMarker([${userLocation?.latitude || 12.9716}, ${userLocation?.longitude || 77.5946}], {
+            radius: 8,
+            fillColor: "#4285F4",
+            color: "#fff",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+          }).addTo(map).bindPopup("You are here");
+
+          const pharmacies = ${JSON.stringify(nearbyPharmacies)};
+          
+          pharmacies.forEach(p => {
+            if (p.location && p.location.coordinates) {
+              const [lng, lat] = p.location.coordinates;
+              const marker = L.marker([lat, lng]).addTo(map);
+              
+              const popupContent = \`
+                <div class="custom-popup">
+                  <div class="pharmacy-name"><span class="status-dot"></span>\${p.pharmacyName}</div>
+                  <div style="font-size: 12px; color: #666;">\${p.address}</div>
+                  <button class="view-btn" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type: 'VIEW_PHARMACY', id: '\${p._id}'}))">
+                    View Details
+                  </button>
+                </div>
+              \`;
+              
+              marker.bindPopup(popupContent);
+            }
+          });
+
+          // Function to center map
+          window.centerMap = (lat, lng) => {
+            map.setView([lat, lng], 15);
+          };
+        </script>
+      </body>
+    </html>
+  `;
+
+  const onMessage = (event) => {
+    const data = JSON.parse(event.nativeEvent.data);
+    if (data.type === 'VIEW_PHARMACY') {
+      navigation.navigate('PharmacyDetails', { pharmacyId: data.id });
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
 
   return (
-    <View style={[s.container, { backgroundColor: colors.background }]}>
-      {/* Map Area */}
-      <View style={s.mapArea}>
-        {/* Teal-tinted gradient background */}
-        <View style={[s.mapBg, { backgroundColor: isDark ? '#0D1F1A' : '#E5F5F0' }]} />
-        {/* Grid lines */}
-        {[...Array(8)].map((_, i) => (
-          <View key={`h${i}`} style={[s.gridLineH, { top: `${(i + 1) * 11}%`, backgroundColor: isDark ? 'rgba(46,189,143,0.08)' : 'rgba(46,189,143,0.12)' }]} />
-        ))}
-        {[...Array(6)].map((_, i) => (
-          <View key={`v${i}`} style={[s.gridLineV, { left: `${(i + 1) * 14}%`, backgroundColor: isDark ? 'rgba(46,189,143,0.08)' : 'rgba(46,189,143,0.12)' }]} />
-        ))}
+    <View style={styles.container}>
+      <WebView
+        ref={webViewRef}
+        originWhitelist={['*']}
+        source={{ html: mapHtml }}
+        style={styles.map}
+        onMessage={onMessage}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+      />
+      
+      <TouchableOpacity 
+        style={[styles.myLocationBtn, { backgroundColor: colors.background }]}
+        onPress={() => {
+          if (userLocation) {
+            webViewRef.current.injectJavaScript(`window.centerMap(${userLocation.latitude}, ${userLocation.longitude})`);
+          }
+        }}
+      >
+        <Ionicons name="locate" size={24} color={colors.accent} />
+      </TouchableOpacity>
 
-        {/* User Location Dot */}
-        <View style={s.userDot}>
-          <View style={s.userDotInner} />
-          <View style={s.userDotPulse} />
-        </View>
-
-        {/* Pharmacy Pins (Mocked rendering on static map grid) */}
-        {pharmacies.map((ph, i) => {
-          // Fallback static positions for visual demonstration if geo isn't mapped
-          const fallbackPositions = [
-            { top: '25%', left: '30%' }, { top: '35%', left: '60%' }, 
-            { top: '50%', left: '45%' }, { top: '40%', left: '20%' }, 
-            { top: '55%', left: '70%' }
-          ];
-          const pos = fallbackPositions[i % fallbackPositions.length];
-          return (
-            <View key={ph._id} style={[s.pin, { top: pos.top, left: pos.left }]}>
-              <View style={s.pinHead}>
-                <Text style={{ fontSize: 12 }}>🏥</Text>
-              </View>
-              <View style={s.pinTail} />
-            </View>
-          );
-        })}
-
-        {/* Filter FAB */}
-        <TouchableOpacity style={s.filterFab} activeOpacity={0.8}>
-          <Text style={{ fontSize: 18 }}>⚙️</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Bottom Sheet */}
-      <View style={[s.bottomSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[s.dragHandle, { backgroundColor: colors.textMuted }]} />
-        <Text style={[s.sheetTitle, { color: colors.textPrimary }]}>Nearby Pharmacies</Text>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
-          {pharmacies.length === 0 ? (
-             <Text style={{ color: colors.textMuted }}>No pharmacies found nearby</Text>
-          ) : (
-            pharmacies.map(ph => (
-              <TouchableOpacity
-                key={ph._id}
-                style={[s.pharmaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                activeOpacity={0.7}
-              >
-                <View style={s.pharmaCardTop}>
-                  <View style={[s.pharmaIcon, {
-                    backgroundColor: colors.accentPaleBg,
-                    borderColor: colors.accentSoftBorder,
-                  }]}>
-                    <Text style={{ fontSize: 20 }}>🏥</Text>
-                  </View>
-                  <View style={[s.statusDot, { backgroundColor: colors.accent }]} />
-                </View>
-                <Text style={[s.pharmaName, { color: colors.textPrimary }]} numberOfLines={1}>{ph.pharmacyName}</Text>
-                <View style={s.pharmaInfoRow}>
-                  <Text style={[s.pharmaInfoText, { color: colors.textSecondary }]} numberOfLines={1}>📍 {ph.address.split(',')[0]}</Text>
-                  <Text style={[s.pharmaInfoText, { color: colors.textSecondary }]}>⭐ 4.5</Text>
-                </View>
-                <View style={[s.statusBadge, { backgroundColor: colors.accentPaleBg }]}>
-                  <Text style={[s.statusBadgeText, { color: colors.accent }]}>
-                    Open Now
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Nearby Pharmacies</Text>
       </View>
     </View>
   );
 };
 
-export default MapScreen;
-
-const makeStyles = (c, isDark) => StyleSheet.create({
-  container: { flex: 1 },
-  mapArea: { flex: 1, position: 'relative', overflow: 'hidden' },
-  mapBg: { ...StyleSheet.absoluteFillObject },
-  gridLineH: { position: 'absolute', left: 0, right: 0, height: 1 },
-  gridLineV: { position: 'absolute', top: 0, bottom: 0, width: 1 },
-
-  userDot: { position: 'absolute', top: '45%', left: '48%', alignItems: 'center', justifyContent: 'center' },
-  userDotInner: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#2EBD8F', borderWidth: 3, borderColor: '#FFF', zIndex: 2 },
-  userDotPulse: { position: 'absolute', width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(46,189,143,0.2)' },
-
-  pin: { position: 'absolute', alignItems: 'center' },
-  pinHead: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#2EBD8F', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF', zIndex: 2 },
-  pinTail: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#2EBD8F', marginTop: -2, zIndex: 1 },
-
-  filterFab: { position: 'absolute', bottom: 20, right: 20, width: 50, height: 50, borderRadius: 25, backgroundColor: '#2EBD8F', justifyContent: 'center', alignItems: 'center', shadowColor: '#2EBD8F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
-
-  bottomSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 1, paddingTop: 12, paddingBottom: 24 },
-  dragHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16, opacity: 0.3 },
-  sheetTitle: { fontSize: 15, fontFamily: 'PlusJakartaSans_800ExtraBold', letterSpacing: -0.2, paddingHorizontal: 24, marginBottom: 14 },
-
-  pharmaCard: { width: 160, borderRadius: 16, borderWidth: 1, padding: 14 },
-  pharmaCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
-  pharmaIcon: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  pharmaName: { fontSize: 13, fontFamily: 'PlusJakartaSans_700Bold', marginBottom: 6 },
-  pharmaInfoRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  pharmaInfoText: { fontSize: 11, fontFamily: 'PlusJakartaSans_500Medium' },
-  statusBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
-  statusBadgeText: { fontSize: 10, fontFamily: 'PlusJakartaSans_700Bold' },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  map: {
+    flex: 1,
+  },
+  header: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 15,
+    borderRadius: 12,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    textAlign: 'center',
+  },
+  myLocationBtn: {
+    position: 'absolute',
+    bottom: 100,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  }
 });
+
+export default MapScreen;

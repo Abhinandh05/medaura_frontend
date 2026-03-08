@@ -5,6 +5,7 @@ import pharmacyReducer from './slices/pharmacySlice';
 import cartReducer from './slices/cartSlice';
 import orderReducer from './slices/orderSlice';
 import adminReducer from './slices/adminSlice';
+import notificationReducer from './slices/notificationSlice';
 
 const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ const store = configureStore({
     cart: cartReducer,
     orders: orderReducer,
     admin: adminReducer,
+    notifications: notificationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

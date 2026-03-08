@@ -24,7 +24,7 @@ const TRENDING = [
 ];
 
 
-const SearchScreen = () => {
+const SearchScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const dispatch = useDispatch();
   const [query, setQuery] = useState('');
@@ -93,13 +93,14 @@ const SearchScreen = () => {
                   key={item._id || i}
                   style={[s.row, i < results.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
                   activeOpacity={0.7}
+                  onPress={() => navigation.navigate('PharmacyDetails', { pharmacyId: item.pharmacyId })}
                 >
                   <View style={[s.iconBox, { backgroundColor: colors.accentPaleBg, borderColor: colors.accentSoftBorder }]}>
                     <Text style={{ fontSize: 18 }}>💊</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.rowText, { color: colors.textPrimary }]}>{item.medicineName || item.name}</Text>
-                    <Text style={{ fontSize: 11, color: colors.textMuted, fontFamily: 'PlusJakartaSans_500Medium' }}>{item.pharmacyName} · ${item.price?.toFixed(2) || '0.00'}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted, fontFamily: 'PlusJakartaSans_500Medium' }}>{item.pharmacyName} · ₹{item.price?.toFixed(2) || '0.00'}</Text>
                   </View>
                   {item.availabilityStatus === 'Available' ? (
                      <Text style={{ color: colors.accent, fontSize: 11, fontFamily: 'PlusJakartaSans_700Bold' }}>In Stock</Text>

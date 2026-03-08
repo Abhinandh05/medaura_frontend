@@ -4,7 +4,6 @@ import {
   Text, 
   StyleSheet, 
   ScrollView, 
-  FlatList, 
   TouchableOpacity,
   Linking,
   Platform
@@ -16,14 +15,16 @@ import { useDispatch, useSelector } from 'react-redux';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
-import PrimaryButton from '../../components/PrimaryButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { fetchPharmacyDetails, clearSelectedPharmacy } from '../../redux/slices/pharmacySlice';
+import { addToCart, removeFromCart } from '../../redux/slices/cartSlice';
 
 const PharmacyDetailsScreen = ({ route, navigation }) => {
   const { pharmacyId } = route.params;
   const dispatch = useDispatch();
   const { selectedPharmacy, isLoading } = useSelector((state) => state.pharmacy);
+  const cartItems = useSelector(s => s.cart.items);
+  const cartIds = cartItems.map(c => c.id || c._id);
 
   useEffect(() => {
     dispatch(fetchPharmacyDetails(pharmacyId));
@@ -47,6 +48,20 @@ const PharmacyDetailsScreen = ({ route, navigation }) => {
       android: `${scheme}${latLng}(${label})`
     });
     Linking.openURL(url);
+  };
+  
+  const toggleCart = (med) => {
+    const uniqueId = med._id || med.id;
+    if (cartIds.includes(uniqueId)) {
+      dispatch(removeFromCart(uniqueId));
+    } else {
+      dispatch(addToCart({
+        ...med,
+        id: uniqueId,
+        pharmacyId: selectedPharmacy?._id,
+        pharmacyName: selectedPharmacy?.name,
+      }));
+    }
   };
 
   if (isLoading) {
@@ -113,10 +128,23 @@ const PharmacyDetailsScreen = ({ route, navigation }) => {
                 <View style={styles.medicineInfo}>
                   <Text style={styles.medicineName}>{med.name}</Text>
                   <Text style={styles.medicineCategory}>{med.category || 'General'}</Text>
+                  <View style={styles.priceTag}>
+                    <Text style={styles.priceText}>₹{med.price || '0.00'}</Text>
+                  </View>
                 </View>
-                <View style={styles.priceTag}>
-                  <Text style={styles.priceText}>${med.price || '0.00'}</Text>
-                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.addBtn,
+                    cartIds.includes(med._id || med.id) ? styles.addBtnActive : styles.addBtnInactive
+                  ]}
+                  onPress={() => toggleCart(med)}
+                >
+                  <Ionicons 
+                    name={cartIds.includes(med._id || med.id) ? "remove" : "add"} 
+                    size={20} 
+                    color={cartIds.includes(med._id || med.id) ? colors.white : colors.primary} 
+                  />
+                </TouchableOpacity>
               </View>
             ))
           ) : (
@@ -265,6 +293,22 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     fontStyle: 'italic',
   },
+  addBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  addBtnInactive: {
+    backgroundColor: 'transparent',
+    borderColor: colors.primary,
+  },
+  addBtnActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  }
 });
 
 export default PharmacyDetailsScreen;

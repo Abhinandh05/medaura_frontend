@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateProfile } from '../../redux/slices/authSlice';
 import { fetchMyPharmacy, updateMyPharmacy } from '../../redux/slices/pharmacySlice';
+import * as Location from 'expo-location';
 
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
@@ -21,7 +22,9 @@ const PharmacyProfileScreen = ({ navigation }) => {
   const [pharmacyName, setPharmacyName] = useState('');
   const [phone, setPhone] = useState(user?.phone || '');
   const [address, setAddress] = useState('');
+  const [coordinates, setCoordinates] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   // Fetch pharmacy details on mount
   React.useEffect(() => {
@@ -37,8 +40,40 @@ const PharmacyProfileScreen = ({ navigation }) => {
     if (myPharmacy) {
       setPharmacyName(myPharmacy.pharmacyName || '');
       setAddress(myPharmacy.address || '');
+      if (myPharmacy.location && myPharmacy.location.coordinates) {
+        setCoordinates({
+          latitude: myPharmacy.location.coordinates[1],
+          longitude: myPharmacy.location.coordinates[0],
+        });
+      }
     }
   }, [user, myPharmacy]);
+
+  const handleSetLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please allow location access to set your pharmacy coordinates.');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      setCoordinates({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+      Alert.alert('Success', 'Location coordinates captured! Please update profile to save.');
+    } catch (error) {
+      console.error('Error fetching location:', error);
+      Alert.alert('Error', 'Failed to get current location.');
+    } finally {
+      setLocationLoading(false);
+    }
+  };
 
   const handleUpdate = async () => {
     if (!name.trim() || !pharmacyName.trim() || !address.trim() || !phone.trim()) {
@@ -54,9 +89,20 @@ const PharmacyProfileScreen = ({ navigation }) => {
       // 2. Update Pharmacy Profile if it exists
       let pharmRes = { meta: { requestStatus: 'fulfilled' } };
       if (myPharmacy?._id) {
+        const pharmacyData = { 
+          pharmacyName, 
+          address, 
+          phone 
+        };
+        
+        if (coordinates) {
+          pharmacyData.latitude = coordinates.latitude;
+          pharmacyData.longitude = coordinates.longitude;
+        }
+
         pharmRes = await dispatch(updateMyPharmacy({
           id: myPharmacy._id,
-          pharmacyData: { pharmacyName, address, phone }
+          pharmacyData
         }));
       }
 
@@ -134,6 +180,37 @@ const PharmacyProfileScreen = ({ navigation }) => {
             </Text>
           </View>
 
+          <View style={[styles.locationContainer, { borderColor: colors.border }]}>
+            <View style={styles.locationInfo}>
+              <Ionicons name="location" size={20} color={coordinates ? colors.accent : colors.textMuted} />
+              <View style={styles.coordinatesWrapper}>
+                <Text style={styles.locationLabel}>Map Coordinates</Text>
+                {coordinates ? (
+                  <Text style={styles.coordinatesText}>
+                    {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
+                  </Text>
+                ) : (
+                  <Text style={[styles.coordinatesText, { color: colors.textMuted }]}>
+                    Not set
+                  </Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={[styles.setLocationBtn, { backgroundColor: colors.accentPaleBg }]}
+              onPress={handleSetLocation}
+              disabled={locationLoading}
+            >
+              {locationLoading ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Text style={[styles.setLocationBtnText, { color: colors.accent }]}>
+                  Set GPS
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
           <PrimaryButton 
             title="Update Profile" 
             onPress={handleUpdate} 
@@ -209,6 +286,42 @@ const styles = StyleSheet.create({
   },
   btn: {
     marginTop: spacing.m,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.m,
+    backgroundColor: '#F8FAFC',
+    borderRadius: spacing.s,
+    borderWidth: 1,
+    marginBottom: spacing.m,
+  },
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  coordinatesWrapper: {
+    marginLeft: spacing.s,
+  },
+  locationLabel: {
+    ...typography.caption,
+    color: colors.textLight,
+  },
+  coordinatesText: {
+    ...typography.bodySmall,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    color: colors.text,
+  },
+  setLocationBtn: {
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.s,
+    borderRadius: spacing.s,
+  },
+  setLocationBtnText: {
+    ...typography.caption,
+    fontWeight: 'bold',
   },
 });
 

@@ -5,7 +5,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 
-const PharmacyCard = ({ name, location, phone, distance, onPress }) => {
+const PharmacyCard = ({ name, location, phone, distance, isOnline = true, onPress }) => {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.headerRow}>
@@ -15,6 +15,7 @@ const PharmacyCard = ({ name, location, phone, distance, onPress }) => {
             style={styles.logoImage} 
             resizeMode="contain"
           />
+          {isOnline && <View style={styles.statusDot} />}
         </View>
         <View style={styles.infoContainer}>
           <Text style={styles.name} numberOfLines={1}>{name}</Text>
@@ -71,6 +72,17 @@ const styles = StyleSheet.create({
   logoImage: {
     width: '70%',
     height: '70%',
+  },
+  statusDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981', // Emerald green
+    borderWidth: 2,
+    borderColor: colors.white,
   },
   infoContainer: {
     flex: 1,

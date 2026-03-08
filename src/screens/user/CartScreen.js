@@ -16,7 +16,7 @@ const CartScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const dispatch = useDispatch();
   
-  const cartItems = useSelector(s => s.cart.items);
+  const cartItems = useSelector(s => s?.cart?.items || []);
   const [isOrdering, setIsOrdering] = useState(false);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
@@ -28,7 +28,7 @@ const CartScreen = ({ navigation }) => {
   const firstPharmacyName = cartItems.length > 0 ? cartItems[0].pharmacyName : 'Pharmacy';
 
   const totalAmount = useMemo(() => {
-    return cartItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
+    return cartItems.reduce((acc, item) => acc + ((item.price || 0) * (item.qty || 0)), 0);
   }, [cartItems]);
 
   const handleCheckout = async () => {
@@ -59,6 +59,11 @@ const CartScreen = ({ navigation }) => {
       })),
       totalAmount
     };
+
+    if (totalAmount < 50) {
+      Alert.alert("Minimum Amount Required", "The minimum order amount for online payment is ₹50.00. Please add more items to your cart.");
+      return;
+    }
 
     try {
       setIsOrdering(true);
@@ -99,11 +104,12 @@ const CartScreen = ({ navigation }) => {
       setIsOrdering(false);
       
       Alert.alert("Success", "Your order has been placed successfully!", [
-        { text: "View Orders", onPress: () => navigation.navigate('Orders') }
+        { text: "View Orders", onPress: () => navigation.navigate('UserTabs', { screen: 'Orders' }) }
       ]);
     } catch (err) {
       setIsOrdering(false);
-      Alert.alert("Checkout Failed", err?.message || 'Could not place order');
+      const errorMessage = err?.response?.data?.message || err?.message || 'Could not place order';
+      Alert.alert("Checkout Failed", errorMessage);
     }
   };
 
@@ -127,7 +133,7 @@ const CartScreen = ({ navigation }) => {
             <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Add medicines from pharmacies to checkout</Text>
             <TouchableOpacity 
               style={[styles.shopBtn, { backgroundColor: colors.accent }]}
-              onPress={() => navigation.navigate('Home')}
+              onPress={() => navigation.navigate('UserTabs', { screen: 'Home' })}
             >
               <Text style={styles.shopBtnText}>Start Shopping</Text>
             </TouchableOpacity>
@@ -149,7 +155,7 @@ const CartScreen = ({ navigation }) => {
                 <View key={item.id || index} style={[styles.cartItem, { borderBottomColor: colors.border }]}>
                   <View style={styles.itemInfo}>
                     <Text style={[styles.itemName, { color: colors.textPrimary }]}>{item.medicineName || item.name}</Text>
-                    <Text style={[styles.itemPrice, { color: colors.accent }]}>₹{(item.price * item.qty).toFixed(2)}</Text>
+                    <Text style={[styles.itemPrice, { color: colors.textPrimary }]}>₹{(item.price * item.qty).toFixed(2)}</Text>
                   </View>
                   <View style={[styles.qtyControl, { backgroundColor: colors.surfaceInput, borderColor: colors.border }]}>
                     <TouchableOpacity 
@@ -182,8 +188,16 @@ const CartScreen = ({ navigation }) => {
               </View>
               <View style={[styles.summaryTotalRow, { borderTopColor: colors.border }]}>
                 <Text style={[styles.summaryTotalLabel, { color: colors.textPrimary }]}>Total Amount</Text>
-                <Text style={[styles.summaryTotalAmount, { color: colors.primary }]}>₹{totalAmount.toFixed(2)}</Text>
+                <Text style={[styles.summaryTotalAmount, { color: colors.textPrimary }]}>₹{(totalAmount || 0).toFixed(2)}</Text>
               </View>
+              {totalAmount < 50 && (
+                <View style={styles.minAmountWarning}>
+                  <Ionicons name="warning" size={16} color={colors.danger} />
+                  <Text style={[styles.minAmountText, { color: colors.danger }]}>
+                    Minimum order for online payment is ₹50.00
+                  </Text>
+                </View>
+              )}
             </View>
           </>
         )}
@@ -192,14 +206,14 @@ const CartScreen = ({ navigation }) => {
       {cartItems.length > 0 && (
         <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
           <TouchableOpacity 
-            style={[styles.checkoutBtn, { backgroundColor: colors.primary }, isOrdering && { opacity: 0.7 }]}
+            style={[styles.checkoutBtn, { backgroundColor: colors.accent }, isOrdering && { opacity: 0.7 }]}
             onPress={handleCheckout}
             disabled={isOrdering}
           >
             {isOrdering ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={styles.checkoutBtnText}>Place Order (₹{totalAmount.toFixed(2)})</Text>
+              <Text style={styles.checkoutBtnText}>Order Now (₹{totalAmount.toFixed(2)})</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -249,6 +263,19 @@ const styles = StyleSheet.create({
   summaryTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 16, borderTopWidth: 1 },
   summaryTotalLabel: { fontSize: 15, fontFamily: 'PlusJakartaSans_700Bold' },
   summaryTotalAmount: { fontSize: 18, fontFamily: 'PlusJakartaSans_800ExtraBold' },
+  minAmountWarning: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginTop: 12, 
+    padding: 8, 
+    backgroundColor: '#FEE2E2', 
+    borderRadius: 8 
+  },
+  minAmountText: { 
+    fontSize: 12, 
+    fontFamily: 'PlusJakartaSans_600SemiBold', 
+    marginLeft: 6 
+  },
 
   footer: { padding: 20, borderTopWidth: 1 },
   checkoutBtn: { padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

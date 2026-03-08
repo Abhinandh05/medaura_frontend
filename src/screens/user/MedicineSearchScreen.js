@@ -1,132 +1,169 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity,
-  Keyboard
-} from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useDispatch, useSelector } from 'react-redux';
+import { useTheme } from '../../theme/ThemeContext';
+import api from '../../services/api';
 
-import { colors } from '../../theme/colors';
-import { spacing } from '../../theme/spacing';
-import { typography } from '../../theme/typography';
-import SearchBar from '../../components/SearchBar';
-import MedicineCard from '../../components/MedicineCard';
-import LoadingSpinner from '../../components/LoadingSpinner';
-import EmptyState from '../../components/EmptyState';
-import { searchMedicines, clearSearchResults } from '../../redux/slices/medicineSlice';
+const MedicineSearchScreen = ({ navigation }) => {
+  const { colors } = useTheme();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-const MedicineSearchScreen = ({ navigation, route }) => {
-  const dispatch = useDispatch();
-  const initialQuery = route.params?.query || '';
-  const [query, setQuery] = useState(initialQuery);
-  const { searchResults, isLoading, error } = useSelector((state) => state.medicine);
+  const searchMedicines = async (query) => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await api.get(`/medicines/search?name=${query}`);
+      setResults(response.data.data);
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (initialQuery) {
-      dispatch(searchMedicines(initialQuery));
-    }
-    return () => {
-      dispatch(clearSearchResults());
-    };
-  }, [dispatch, initialQuery]);
+    const delayDebounceFn = setTimeout(() => {
+      searchMedicines(searchQuery);
+    }, 500);
 
-  const handleSearch = () => {
-    Keyboard.dismiss();
-    if (query.trim()) {
-      dispatch(searchMedicines(query));
-    }
-  };
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
 
-  const handleMedicinePress = (item) => {
-    navigation.navigate('PharmacyDetails', { pharmacyId: item.pharmacyId });
-  };
+  const renderItem = ({ item }) => (
+    <TouchableOpacity 
+      style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+      onPress={() => navigation.navigate('PharmacyDetails', { pharmacyId: item.pharmacy._id })}
+    >
+      <View style={styles.resultInfo}>
+        <Text style={[styles.medicineName, { color: colors.text }]}>{item.name}</Text>
+        <Text style={[styles.pharmacyName, { color: colors.textMuted }]}>{item.pharmacy.pharmacyName}</Text>
+        <Text style={[styles.price, { color: colors.accent }]}>₹{item.price}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <View style={styles.searchWrapper}>
-            <SearchBar
-              value={query}
-              onChangeText={setQuery}
-              onSubmitEditing={handleSearch}
-              placeholder="Search medicine name..."
-              autoFocus={!initialQuery}
-            />
-          </View>
-        </View>
-
-        {isLoading ? (
-          <LoadingSpinner />
-        ) : (
-          <FlatList
-            data={searchResults}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <MedicineCard
-                medicineName={item.name}
-                pharmacyName={item.pharmacyName}
-                distance={item.distance ? `${item.distance} km` : 'Near you'}
-                availabilityStatus={item.isAvailable ? 'Available' : 'Out of Stock'}
-                onPressContact={() => console.log('Contact pharmacy')}
-              />
-            )}
-            ListEmptyComponent={
-              query ? (
-                <EmptyState
-                  title="No Medicines Found"
-                  message={`We couldn't find any results for "${query}". Try searching for something else.`}
-                  iconName="search-outline"
-                />
-              ) : (
-                <EmptyState
-                  title="Search Medicines"
-                  message="Enter a medicine name to find pharmacies nearby."
-                  iconName="medical-outline"
-                />
-              )
-            }
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={[styles.searchContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search for medicines..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoFocus
           />
-        )}
+        </View>
       </View>
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item._id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            searchQuery ? (
+              <View style={styles.center}>
+                <Ionicons name="search-outline" size={64} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No medicines found for &quot;{searchQuery}&quot;</Text>
+              </View>
+            ) : (
+              <View style={styles.center}>
+                <Ionicons name="medical-outline" size={64} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Start searching for medicines</Text>
+              </View>
+            )
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
   container: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.m,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    padding: 20,
+    gap: 15,
   },
-  backButton: {
-    marginRight: spacing.m,
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  searchWrapper: {
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'PlusJakartaSans_500Medium',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  list: {
+    padding: 20,
+  },
+  resultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  resultInfo: {
     flex: 1,
   },
-  listContent: {
-    padding: spacing.m,
-    flexGrow: 1,
+  medicineName: {
+    fontSize: 16,
+    fontFamily: 'PlusJakartaSans_700Bold',
   },
+  pharmacyName: {
+    fontSize: 14,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    marginTop: 2,
+  },
+  price: {
+    fontSize: 16,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    marginTop: 5,
+  },
+  emptyText: {
+    marginTop: 15,
+    fontSize: 16,
+    textAlign: 'center',
+    fontFamily: 'PlusJakartaSans_500Medium',
+  }
 });
 
 export default MedicineSearchScreen;

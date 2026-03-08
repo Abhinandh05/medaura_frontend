@@ -1,6 +1,20 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 
+export const fetchAllMedicines = createAsyncThunk(
+  'medicine/fetchAll',
+  async ({ page = 1, limit = 50, category } = {}, { rejectWithValue }) => {
+    try {
+      let url = `/medicines?page=${page}&limit=${limit}`;
+      if (category && category !== 'All') url += `&category=${category}`;
+      const response = await api.get(url);
+      return response.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch medicines');
+    }
+  }
+);
+
 export const searchMedicines = createAsyncThunk(
   'medicine/search',
   async (query, { rejectWithValue }) => {
@@ -76,6 +90,7 @@ export const deleteMedicine = createAsyncThunk(
 const medicineSlice = createSlice({
   name: 'medicine',
   initialState: {
+    allMedicines: [],
     searchResults: [],
     pharmacyMedicines: [],
     categories: ['All', 'Fever', 'Pain Relief', 'Cold', 'Vitamins', 'First Aid', 'Chronic'],
@@ -90,6 +105,19 @@ const medicineSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Fetch All Medicines
+      .addCase(fetchAllMedicines.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchAllMedicines.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.allMedicines = action.payload.data || [];
+      })
+      .addCase(fetchAllMedicines.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
       // Search
       .addCase(searchMedicines.pending, (state) => {
         state.isLoading = true;

@@ -20,6 +20,8 @@ import HelpSupportScreen from '../screens/user/HelpSupportScreen';
 import AboutScreen from '../screens/user/AboutScreen';
 import PharmacyDetailsScreen from '../screens/user/PharmacyDetailsScreen';
 import CartScreen from '../screens/user/CartScreen';
+import MedicineSearchScreen from '../screens/user/MedicineSearchScreen';
+import NearbyPharmaciesScreen from '../screens/user/NearbyPharmaciesScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -120,6 +122,8 @@ const UserStack = () => {
       <Stack.Screen name="About" component={AboutScreen} />
       <Stack.Screen name="PharmacyDetails" component={PharmacyDetailsScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
+      <Stack.Screen name="MedicineSearch" component={MedicineSearchScreen} />
+      <Stack.Screen name="NearbyPharmacies" component={NearbyPharmaciesScreen} />
     </Stack.Navigator>
   );
 };

@@ -8,6 +8,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Dimensions,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,9 +38,10 @@ const STATUS_COLORS = {
 
 const OwnerDashboard = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
   const { stats, statsLoading } = useSelector((state) => state.pharmacy);
+  const { unreadCount } = useSelector((state) => state.notifications);
   const [refreshing, setRefreshing] = useState(false);
+  const [isOrdersModalVisible, setIsOrdersModalVisible] = useState(false);
 
   useEffect(() => {
     dispatch(fetchStats());
@@ -67,14 +70,6 @@ const OwnerDashboard = ({ navigation }) => {
     if (hour < 12) return 'Good Morning';
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
-  };
-
-  const formatDate = () => {
-    return new Date().toLocaleDateString('en-IN', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'short',
-    });
   };
 
   const getTimeAgo = (dateStr) => {
@@ -150,13 +145,27 @@ const OwnerDashboard = ({ navigation }) => {
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>{getGreeting()} \uD83D\uDC4B</Text>
             <Text style={styles.pharmacyName}>
-              {user?.pharmacyName || 'Your Pharmacy'}
+              {stats.pharmacyName || 'Your Pharmacy'}
             </Text>
-            <Text style={styles.dateText}>{formatDate()}</Text>
           </View>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={22} color={colors.red} />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity 
+              style={styles.notificationBtn} 
+              onPress={() => setIsOrdersModalVisible(true)}
+            >
+              <Ionicons name="notifications-outline" size={24} color={colors.text} />
+              {unreadCount > 0 && (
+                <View style={[styles.notificationBadge, { backgroundColor: colors.red }]}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={22} color={colors.red} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Revenue Hero Card */}
@@ -169,7 +178,7 @@ const OwnerDashboard = ({ navigation }) => {
           >
             <View style={styles.revenueRow}>
               <View style={styles.revenueBlock}>
-                <Text style={styles.revenueLabel}>Today's Revenue</Text>
+                <Text style={styles.revenueLabel}>Today&apos;s Revenue</Text>
                 <Text style={styles.revenueValue}>
                   {formatCurrency(stats.todayRevenue)}
                 </Text>
@@ -315,42 +324,85 @@ const OwnerDashboard = ({ navigation }) => {
             })
           )}
         </View>
-
-        {/* Activity Feed */}
-        <View style={[styles.sectionPadding, { marginBottom: spacing.xl }]}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {stats.activity.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons
-                name="pulse-outline"
-                size={36}
-                color={colors.textMuted}
-              />
-              <Text style={styles.emptyText}>No recent activity</Text>
-            </View>
-          ) : (
-            stats.activity.map((item, idx) => (
-              <View key={idx} style={styles.activityRow}>
-                <View
-                  style={[
-                    styles.activityDot,
-                    {
-                      backgroundColor:
-                        item.type === 'order' ? '#2563EB' : colors.primary,
-                    },
-                  ]}
-                />
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityText}>{item.text}</Text>
-                  <Text style={styles.activityTime}>
-                    {getTimeAgo(item.time)}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
       </ScrollView>
+
+      {/* Orders Overlay Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isOrdersModalVisible}
+        onRequestClose={() => setIsOrdersModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setIsOrdersModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Incoming Orders</Text>
+                  <TouchableOpacity 
+                    onPress={() => setIsOrdersModalVisible(false)}
+                    style={styles.closeBtn}
+                  >
+                    <Ionicons name="close" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView 
+                  style={styles.modalOrderList} 
+                  showsVerticalScrollIndicator={false}
+                >
+                  {stats.recentOrders.length === 0 ? (
+                    <View style={styles.modalEmptyState}>
+                      <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
+                      <Text style={styles.modalEmptyText}>No recent orders</Text>
+                    </View>
+                  ) : (
+                    stats.recentOrders.map((order) => {
+                      const statusColor = STATUS_COLORS[order.status] || STATUS_COLORS.Placed;
+                      return (
+                        <TouchableOpacity
+                          key={order._id}
+                          style={styles.modalOrderCard}
+                          onPress={() => {
+                            setIsOrdersModalVisible(false);
+                            navigation.navigate('PharmacyOrders');
+                          }}
+                        >
+                          <View style={styles.modalOrderInfo}>
+                            <Text style={styles.modalOrderCustomer}>{order.customerName}</Text>
+                            <Text style={styles.modalOrderMeta}>
+                              {order.itemCount} items • {getTimeAgo(order.createdAt)}
+                            </Text>
+                          </View>
+                          <View style={styles.modalOrderRight}>
+                            <Text style={styles.modalOrderAmount}>₹{order.totalAmount.toFixed(0)}</Text>
+                            <View style={[styles.modalStatusBadge, { backgroundColor: statusColor.bg }]}>
+                              <Text style={[styles.modalStatusText, { color: statusColor.text }]}>
+                                {order.status}
+                              </Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+
+                <TouchableOpacity 
+                  style={styles.viewAllBtn}
+                  onPress={() => {
+                    setIsOrdersModalVisible(false);
+                    navigation.navigate('PharmacyOrders');
+                  }}
+                >
+                  <Text style={styles.viewAllBtnText}>View All Orders</Text>
+                  <Ionicons name="arrow-forward" size={18} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -408,6 +460,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 4,
+    marginLeft: spacing.s,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    paddingHorizontal: 2,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: fonts.bold,
   },
 
   /* Sections */
@@ -598,31 +683,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Activity */
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing.m,
-  },
-  activityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 5,
-    marginRight: spacing.s,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityText: {
-    ...typography.bodySmall,
-    color: colors.text,
-  },
-  activityTime: {
-    ...typography.captionSmall,
-    color: colors.textLight,
-    marginTop: 1,
-  },
 
   /* Empty States */
   emptyCard: {
@@ -644,6 +704,109 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: 4,
+  },
+
+  /* Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.m,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    maxHeight: '80%',
+    borderRadius: 24,
+    padding: spacing.m,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: spacing.m,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: spacing.m,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalOrderList: {
+    marginBottom: spacing.m,
+  },
+  modalOrderCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.m,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  modalOrderInfo: {
+    flex: 1,
+  },
+  modalOrderCustomer: {
+    ...typography.body,
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  modalOrderMeta: {
+    ...typography.captionSmall,
+    color: colors.textLight,
+  },
+  modalOrderRight: {
+    alignItems: 'flex-end',
+  },
+  modalOrderAmount: {
+    ...typography.body,
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  modalStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  modalStatusText: {
+    fontSize: 10,
+    fontFamily: fonts.bold,
+    textTransform: 'uppercase',
+  },
+  modalEmptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  modalEmptyText: {
+    ...typography.bodySmall,
+    color: colors.textLight,
+    marginTop: spacing.s,
+  },
+  viewAllBtn: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.m,
+    borderRadius: 16,
+    gap: spacing.s,
+  },
+  viewAllBtnText: {
+    ...typography.body,
+    color: '#FFFFFF',
+    fontFamily: fonts.bold,
   },
 });
 

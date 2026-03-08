@@ -9,7 +9,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useTheme } from '../../theme/ThemeContext';
 import { addToCart, removeFromCart } from '../../redux/slices/cartSlice';
 import { fetchNearbyPharmacies } from '../../redux/slices/pharmacySlice';
-import { searchMedicines, fetchCategories } from '../../redux/slices/medicineSlice';
+import { fetchAllMedicines, fetchCategories } from '../../redux/slices/medicineSlice';
 import * as Location from 'expo-location';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -20,7 +20,7 @@ const HomeScreen = ({ navigation }) => {
   const { user } = useSelector(s => s.auth);
   const cartItems = useSelector(s => s.cart.items);
   const { nearbyPharmacies } = useSelector(s => s.pharmacy);
-  const { searchResults, categories } = useSelector(s => s.medicine);
+  const { allMedicines, categories } = useSelector(s => s.medicine);
 
   const [activeCat, setActiveCat] = useState('All');
   const [locationName, setLocationName] = useState('Locating...');
@@ -56,13 +56,13 @@ const HomeScreen = ({ navigation }) => {
         dispatch(fetchNearbyPharmacies({ lat: 12.9716, lng: 77.5946, maxDistance: 10 }));
       }
     })();
-    // Dispatch a generic search to populate medicines on home screen
-    dispatch(searchMedicines(''));
+    // Fetch all available medicines for home screen
+    dispatch(fetchAllMedicines());
   }, [dispatch]);
 
   // Handle derived lists
   const pharmacies = nearbyPharmacies || [];
-  const medicines = searchResults || [];
+  const medicines = allMedicines || [];
 
   // Animations
   const fadeAnims = useRef([...Array(8)].map(() => new Animated.Value(0))).current;
@@ -90,10 +90,9 @@ const HomeScreen = ({ navigation }) => {
     transform: [{ translateY: slideAnims[Math.min(i, 7)] }],
   });
 
-  // Filter medicines by mock category logic if needed (backend doesn't have categories natively yet)
   const filteredMeds = activeCat === 'All' 
     ? medicines 
-    : medicines.filter(med => med.category === activeCat); // You can add logic here if backend adds categories later.
+    : medicines.filter(med => med.category === activeCat);
 
   const cartIds = cartItems.map(c => c.id || c._id);
 
@@ -102,7 +101,12 @@ const HomeScreen = ({ navigation }) => {
     if (cartIds.includes(uniqueId)) {
       dispatch(removeFromCart(uniqueId));
     } else {
-      dispatch(addToCart({ ...med, id: uniqueId }));
+      dispatch(addToCart({
+        ...med,
+        id: uniqueId,
+        pharmacyId: med.pharmacyId,
+        pharmacyName: med.pharmacyName,
+      }));
     }
   };
 
@@ -172,7 +176,7 @@ const HomeScreen = ({ navigation }) => {
           {[
             { icon: '🏥', val: pharmacies.length.toString(), label: 'Pharmacies' },
             { icon: '💊', val: medicines.length.toString(), label: 'Medicines' },
-            { icon: '⚡', val: '15m', label: 'Avg Delivery' },
+            { icon: '🛵', val: '15m', label: 'Avg Delivery' },
           ].map((st, i) => (
             <View key={i} style={[s.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={{ fontSize: 22 }}>{st.icon}</Text>
@@ -210,7 +214,7 @@ const HomeScreen = ({ navigation }) => {
         <Animated.View style={animStyle(4)}>
           <View style={s.sectionHeader}>
             <Text style={[s.sectionTitle, { color: colors.textPrimary }]}>Nearby Pharmacies</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Nearby')}>
+            <TouchableOpacity onPress={() => navigation.navigate('NearbyPharmacies')}>
               <Text style={[s.seeAll, { color: colors.accent }]}>See all</Text>
             </TouchableOpacity>
           </View>
@@ -223,6 +227,7 @@ const HomeScreen = ({ navigation }) => {
                     key={ph._id}
                     style={[s.pharmaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                     activeOpacity={0.7}
+                    onPress={() => navigation.navigate('PharmacyDetails', { pharmacy: ph })}
                   >
                     <View style={s.pharmaCardTop}>
                       <View style={[s.pharmaIcon, {
@@ -253,7 +258,7 @@ const HomeScreen = ({ navigation }) => {
         <Animated.View style={animStyle(5)}>
           <View style={s.sectionHeader}>
             <Text style={[s.sectionTitle, { color: colors.textPrimary }]}>Medicines</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('MedicineSearch')}>
               <Text style={[s.seeAll, { color: colors.accent }]}>View all</Text>
             </TouchableOpacity>
           </View>
@@ -289,9 +294,11 @@ const HomeScreen = ({ navigation }) => {
                   const isCart = cartIds.includes(uniqueId);
                   // The backend search route returns `medicineName`, `price`, `availabilityStatus`, and `pharmacyName` directly
                   return (
-                    <View
+                    <TouchableOpacity
                       key={uniqueId}
                       style={[s.medRow, i < filteredMeds.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
+                      activeOpacity={0.7}
+                      onPress={() => navigation.navigate('PharmacyDetails', { pharmacyId: med.pharmacyId?._id || med.pharmacyId })}
                     >
                       <View style={[s.medIconWrap, { backgroundColor: colors.surfaceInput, borderColor: colors.border }]}>
                         <Text style={{ fontSize: 22 }}>💊</Text>
@@ -300,7 +307,7 @@ const HomeScreen = ({ navigation }) => {
                         <Text style={[s.medName, { color: colors.textPrimary }]}>{med.medicineName || med.name}</Text>
                         <Text style={[s.medCat, { color: colors.textSecondary }]} numberOfLines={1}>{med.pharmacyName}</Text>
                         <View style={s.medPriceRow}>
-                          <Text style={[s.medPrice, { color: colors.textPrimary }]}>${med.price?.toFixed(2) || '0.00'}</Text>
+                          <Text style={[s.medPrice, { color: colors.textPrimary }]}>₹{med.price?.toFixed(2) || '0.00'}</Text>
                           {med.availabilityStatus === 'Available' ? (
                              <View style={[s.medStock, { backgroundColor: colors.accentPaleBg }]}>
                                <Text style={[s.medStockTxt, { color: colors.accent }]}>In Stock</Text>
@@ -318,14 +325,17 @@ const HomeScreen = ({ navigation }) => {
                           isCart ? { backgroundColor: colors.accentPaleBg, borderColor: colors.accent }
                                  : { backgroundColor: colors.surfaceInput, borderColor: colors.border }
                         ]}
-                        onPress={() => med.availabilityStatus === 'Available' && toggleCart(med)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          med.availabilityStatus === 'Available' && toggleCart(med);
+                        }}
                         disabled={med.availabilityStatus !== 'Available'}
                       >
                         <Text style={[s.addBtnTxt, { color: isCart ? colors.accent : colors.textPrimary }]}>
                           {isCart ? '−' : '+'}
                         </Text>
                       </TouchableOpacity>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })
               )}
@@ -349,7 +359,7 @@ const HomeScreen = ({ navigation }) => {
                 style={[s.quickCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 activeOpacity={0.7}
                 onPress={() => {
-                  if (qa.title === 'My Orders') navigation.navigate('Orders');
+                  if (qa.title === 'My Orders') navigation.navigate('UserTabs', { screen: 'Orders' });
                 }}
               >
                 <Text style={{ fontSize: 24 }}>{qa.icon}</Text>

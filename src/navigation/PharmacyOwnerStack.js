@@ -5,6 +5,7 @@ import ManageMedicinesScreen from '../screens/pharmacyOwner/ManageMedicinesScree
 import AddMedicineScreen from '../screens/pharmacyOwner/AddMedicineScreen';
 import PharmacyProfileScreen from '../screens/pharmacyOwner/PharmacyProfileScreen';
 import PharmacyOrdersScreen from '../screens/pharmacyOwner/PharmacyOrdersScreen';
+import NotificationsScreen from '../screens/pharmacyOwner/NotificationsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -16,6 +17,7 @@ const PharmacyOwnerStack = () => {
       <Stack.Screen name="AddMedicine" component={AddMedicineScreen} />
       <Stack.Screen name="PharmacyProfile" component={PharmacyProfileScreen} />
       <Stack.Screen name="PharmacyOrders" component={PharmacyOrdersScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
     </Stack.Navigator>
   );
 };

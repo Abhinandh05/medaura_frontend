@@ -9,6 +9,8 @@ import PharmacyOwnerStack from './PharmacyOwnerStack';
 import AdminStack from './AdminStack';
 import Splash from '../screens/Splash';
 import { restoreToken } from '../redux/slices/authSlice';
+import socketService from '../services/socketService';
+import store from '../redux/store';
 
 const RootNavigator = () => {
   const dispatch = useDispatch();
@@ -48,6 +50,15 @@ const RootNavigator = () => {
 
     bootstrapAsync();
   }, [dispatch]);
+
+  useEffect(() => {
+    const { user, token } = store.getState().auth;
+    if (token && user) {
+      socketService.connect(user.id || user._id, user.role);
+    } else {
+      socketService.disconnect();
+    }
+  }, [token, role]);
 
   if (!appIsReady) {
     return <Splash />;
