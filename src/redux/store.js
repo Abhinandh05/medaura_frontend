@@ -4,6 +4,7 @@ import medicineReducer from './slices/medicineSlice';
 import pharmacyReducer from './slices/pharmacySlice';
 import cartReducer from './slices/cartSlice';
 import orderReducer from './slices/orderSlice';
+import adminReducer from './slices/adminSlice';
 
 const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ const store = configureStore({
     pharmacy: pharmacyReducer,
     cart: cartReducer,
     orders: orderReducer,
+    admin: adminReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -1,28 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   FlatList, 
-  TouchableOpacity 
+  TouchableOpacity,
+  Alert,
+  RefreshControl 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useSelector, useDispatch } from 'react-redux';
 
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import SearchBar from '../../components/SearchBar';
 import EmptyState from '../../components/EmptyState';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { fetchAllUsers, deleteUser } from '../../redux/slices/adminSlice';
 
 const ManageUsersScreen = ({ navigation }) => {
-  const [users] = useState([
-    { id: '1', name: 'John Doe', email: 'john@example.com', role: 'user' },
-    { id: '2', name: 'City Pharma', email: 'city@pharma.com', role: 'pharmacy_owner' },
-    { id: '3', name: 'Admin Jane', email: 'jane@medaura.com', role: 'admin' },
-    { id: '4', name: 'Robert Smith', email: 'robert@test.com', role: 'user' },
-  ]);
+  const dispatch = useDispatch();
+  const { users, isLoading } = useSelector((state) => state.admin);
+  const { user: currentUser } = useSelector((state) => state.auth);
   const [search, setSearch] = useState('');
+
+  const loadUsers = useCallback(() => {
+    dispatch(fetchAllUsers());
+  }, [dispatch]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -37,6 +47,25 @@ const ManageUsersScreen = ({ navigation }) => {
     }
   };
 
+  const handleDeleteUser = (user) => {
+    if (user._id === currentUser?._id) {
+      Alert.alert('Error', 'You cannot delete your own account.');
+      return;
+    }
+    Alert.alert(
+      'Delete User',
+      `Are you sure you want to delete "${user.name}"?${user.role === 'pharmacy_owner' ? ' This will also delete their pharmacy and medicines.' : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => dispatch(deleteUser(user._id)),
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -45,6 +74,9 @@ const ManageUsersScreen = ({ navigation }) => {
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Manage Users</Text>
+          <View style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>{users.length}</Text>
+          </View>
         </View>
 
         <View style={styles.searchContainer}>
@@ -55,37 +87,56 @@ const ManageUsersScreen = ({ navigation }) => {
           />
         </View>
 
-        <FlatList
-          data={filteredUsers}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => {
-            const badge = getRoleBadgeColor(item.role);
-            return (
-              <View style={styles.userCard}>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{item.name}</Text>
-                  <Text style={styles.userEmail}>{item.email}</Text>
-                  <View style={[styles.roleBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.roleText, { color: badge.text }]}>
-                      {item.role.replace('_', ' ').toUpperCase()}
-                    </Text>
+        {isLoading && users.length === 0 ? (
+          <LoadingSpinner />
+        ) : (
+          <FlatList
+            data={filteredUsers}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={isLoading} onRefresh={loadUsers} colors={[colors.primary]} />
+            }
+            renderItem={({ item }) => {
+              const badge = getRoleBadgeColor(item.role);
+              const isCurrentUser = item._id === currentUser?._id;
+              return (
+                <View style={styles.userCard}>
+                  <View style={styles.userInfo}>
+                    <View style={styles.userNameRow}>
+                      <Text style={styles.userName}>{item.name}</Text>
+                      {isCurrentUser && (
+                        <Text style={styles.youBadge}>YOU</Text>
+                      )}
+                    </View>
+                    <Text style={styles.userEmail}>{item.email}</Text>
+                    {item.phone && <Text style={styles.userPhone}>{item.phone}</Text>}
+                    <View style={[styles.roleBadge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.roleText, { color: badge.text }]}>
+                        {item.role.replace('_', ' ').toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
+                  {!isCurrentUser && (
+                    <TouchableOpacity 
+                      style={styles.actionBtn}
+                      onPress={() => handleDeleteUser(item)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color={colors.red} />
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <TouchableOpacity style={styles.actionBtn}>
-                  <Ionicons name="settings-outline" size={20} color={colors.textLight} />
-                </TouchableOpacity>
-              </View>
-            );
-          }}
-          ListEmptyComponent={
-            <EmptyState
-              title="No Users Found"
-              message="No users match your current search criteria."
-              iconName="people-outline"
-            />
-          }
-        />
+              );
+            }}
+            ListEmptyComponent={
+              <EmptyState
+                title="No Users Found"
+                message={search ? 'No users match your search.' : 'No users found.'}
+                iconName="people-outline"
+              />
+            }
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -112,12 +163,27 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h3,
     color: colors.text,
+    flex: 1,
+  },
+  headerBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  headerBadgeText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: 'bold',
   },
   searchContainer: {
     padding: spacing.m,
   },
   listContent: {
     padding: spacing.m,
+    flexGrow: 1,
   },
   userCard: {
     flexDirection: 'row',
@@ -133,21 +199,41 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s,
+  },
   userName: {
     ...typography.body,
     fontWeight: 'bold',
     color: colors.text,
   },
+  youBadge: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#4F46E5',
+    backgroundColor: '#E0E7FF',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
   userEmail: {
     ...typography.caption,
     color: colors.textLight,
-    marginBottom: spacing.s,
+  },
+  userPhone: {
+    ...typography.caption,
+    color: colors.textLight,
+    marginBottom: spacing.xs,
   },
   roleBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.s,
     paddingVertical: 2,
     borderRadius: spacing.s,
+    marginTop: spacing.xs,
   },
   roleText: {
     fontSize: 10,

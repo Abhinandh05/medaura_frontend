@@ -36,11 +36,13 @@ const RootNavigator = () => {
         }
       } catch (e) {
         console.error('Failed to restore token', e);
+        // Always reset auth state on error so isLoading doesn't stay true
+        dispatch(restoreToken({ token: null, user: null, role: null }));
       } finally {
         // Set a small delay for splash screen visibility
         setTimeout(() => {
           setAppIsReady(true);
-        }, 2000);
+        }, 500);
       }
     };
 

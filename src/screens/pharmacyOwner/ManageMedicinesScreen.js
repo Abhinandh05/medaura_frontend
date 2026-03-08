@@ -1,40 +1,91 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
   TouchableOpacity,
-  Switch
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
-import { typography } from '../../theme/typography';
+import { typography, fonts } from '../../theme/typography';
 import SearchBar from '../../components/SearchBar';
 import EmptyState from '../../components/EmptyState';
+import { fetchPharmacyMedicines, deleteMedicine, updateMedicine } from '../../redux/slices/medicineSlice';
+import { fetchMyPharmacy } from '../../redux/slices/pharmacySlice';
 
 const ManageMedicinesScreen = ({ navigation }) => {
-  // Local state for demo, in real app would come from Redux and API
-  const [medicines, setMedicines] = useState([
-    { id: '1', name: 'Paracetamol', price: '5.00', quantity: '100', isAvailable: true },
-    { id: '2', name: 'Amoxicillin', price: '12.50', quantity: '50', isAvailable: true },
-    { id: '3', name: 'Ibuprofen', price: '8.00', quantity: '0', isAvailable: false },
-    { id: '4', name: 'Cetirizine', price: '4.20', quantity: '200', isAvailable: true },
-  ]);
+  const dispatch = useDispatch();
+  const { myPharmacy } = useSelector((state) => state.pharmacy);
+  const { pharmacyMedicines, isLoading } = useSelector((state) => state.medicine);
   const [search, setSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const toggleAvailability = (id) => {
-    setMedicines(prev => prev.map(med => 
-      med.id === id ? { ...med, isAvailable: !med.isAvailable } : med
-    ));
+  const loadMedicines = useCallback(async () => {
+    let pharmacy = myPharmacy;
+    if (!pharmacy) {
+      const res = await dispatch(fetchMyPharmacy()).unwrap();
+      pharmacy = res.data;
+    }
+    if (pharmacy?._id) {
+      dispatch(fetchPharmacyMedicines(pharmacy._id));
+    }
+  }, [dispatch, myPharmacy]);
+
+  useEffect(() => {
+    loadMedicines();
+  }, [loadMedicines]);
+
+  // Reload when returning from AddMedicine screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (myPharmacy?._id) {
+        dispatch(fetchPharmacyMedicines(myPharmacy._id));
+      }
+    });
+    return unsubscribe;
+  }, [navigation, dispatch, myPharmacy]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadMedicines();
+    setRefreshing(false);
+  }, [loadMedicines]);
+
+  const handleDelete = (med) => {
+    Alert.alert(
+      'Delete Medicine',
+      `Are you sure you want to remove "${med.medicineName}" from inventory?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => dispatch(deleteMedicine(med._id)),
+        },
+      ]
+    );
   };
 
-  const filteredMedicines = medicines.filter(med => 
-    med.name.toLowerCase().includes(search.toLowerCase())
+  const toggleAvailability = (med) => {
+    const newQty = med.stockQuantity === 0 ? 1 : 0;
+    dispatch(
+      updateMedicine({
+        id: med._id,
+        data: { stockQuantity: newQty },
+      })
+    );
+  };
+
+  const filteredMedicines = pharmacyMedicines.filter((med) =>
+    med.medicineName.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -51,44 +102,92 @@ const ManageMedicinesScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.searchContainer}>
-          <SearchBar 
-            placeholder="Search your inventory..." 
+          <SearchBar
+            placeholder="Search your inventory..."
             value={search}
             onChangeText={setSearch}
           />
         </View>
 
-        <FlatList
-          data={filteredMedicines}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <View style={styles.medicineCard}>
-              <View style={styles.medicineInfo}>
-                <Text style={styles.medicineName}>{item.name}</Text>
-                <Text style={styles.medicineDetails}>Price: ${item.price} | Stock: {item.quantity}</Text>
+        {isLoading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredMedicines}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[colors.primary]}
+              />
+            }
+            renderItem={({ item }) => (
+              <View style={styles.medicineCard}>
+                <View style={styles.medicineInfo}>
+                  <Text style={styles.medicineName}>{item.medicineName}</Text>
+                  <Text style={styles.medicineDetails}>
+                    \u20B9{item.price} | Stock: {item.stockQuantity}
+                    {item.category ? ` | ${item.category}` : ''}
+                  </Text>
+                  <View
+                    style={[
+                      styles.statusChip,
+                      {
+                        backgroundColor:
+                          item.availabilityStatus === 'Available'
+                            ? '#F0FDF4'
+                            : '#FEF2F2',
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusText,
+                        {
+                          color:
+                            item.availabilityStatus === 'Available'
+                              ? '#16A34A'
+                              : '#DC2626',
+                        },
+                      ]}
+                    >
+                      {item.availabilityStatus}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => toggleAvailability(item)}
+                  >
+                    <Ionicons
+                      name={item.stockQuantity > 0 ? 'eye' : 'eye-off'}
+                      size={20}
+                      color={item.stockQuantity > 0 ? colors.primary : colors.textLight}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => handleDelete(item)}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={colors.red} />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.actions}>
-                <Switch
-                  value={item.isAvailable}
-                  onValueChange={() => toggleAvailability(item.id)}
-                  trackColor={{ false: '#CBD5E0', true: colors.accent }}
-                  thumbColor={item.isAvailable ? colors.primary : '#F7FAFC'}
-                />
-                <TouchableOpacity style={styles.editBtn}>
-                  <Ionicons name="create-outline" size={20} color={colors.textLight} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-          ListEmptyComponent={
-            <EmptyState
-              title="No Medicines Found"
-              message="Your inventory is empty or no results match your search."
-              iconName="medical-outline"
-            />
-          }
-        />
+            )}
+            ListEmptyComponent={
+              <EmptyState
+                title="No Medicines Found"
+                message="Your inventory is empty or no results match your search."
+                iconName="medical-outline"
+              />
+            }
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -122,8 +221,14 @@ const styles = StyleSheet.create({
     padding: spacing.m,
     backgroundColor: colors.white,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   listContent: {
     padding: spacing.m,
+    flexGrow: 1,
   },
   medicineCard: {
     flexDirection: 'row',
@@ -132,7 +237,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     padding: spacing.m,
     borderRadius: spacing.m,
-    marginBottom: spacing.m,
+    marginBottom: spacing.s,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -141,7 +246,7 @@ const styles = StyleSheet.create({
   },
   medicineName: {
     ...typography.body,
-    fontWeight: 'bold',
+    fontFamily: fonts.bold,
     color: colors.text,
   },
   medicineDetails: {
@@ -149,12 +254,23 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     marginTop: 2,
   },
+  statusChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  statusText: {
+    ...typography.label,
+    textTransform: 'uppercase',
+  },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  editBtn: {
-    marginLeft: spacing.m,
+  actionBtn: {
+    marginLeft: spacing.s,
     padding: spacing.s,
   },
 });

@@ -29,7 +29,7 @@ const RegisterScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user');
+  const role = 'user';
   
   const [localError, setLocalError] = useState('');
 
@@ -120,29 +120,6 @@ const RegisterScreen = ({ navigation }) => {
               secureTextEntry
             />
 
-            <View style={styles.roleContainer}>
-              <Text style={styles.roleLabel}>Register As</Text>
-              <View style={styles.roleButtons}>
-                <TouchableOpacity 
-                  style={[styles.roleButton, role === 'user' && styles.roleButtonActive]} 
-                  onPress={() => setRole('user')}
-                >
-                  <Text style={[styles.roleButtonText, role === 'user' && styles.roleButtonTextActive]}>User</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.roleButton, role === 'pharmacy_owner' && styles.roleButtonActive]} 
-                  onPress={() => setRole('pharmacy_owner')}
-                >
-                  <Text style={[styles.roleButtonText, role === 'pharmacy_owner' && styles.roleButtonTextActive]}>Pharmacy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.roleButton, role === 'admin' && styles.roleButtonActive]} 
-                  onPress={() => setRole('admin')}
-                >
-                  <Text style={[styles.roleButtonText, role === 'admin' && styles.roleButtonTextActive]}>Admin</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
 
             <PrimaryButton 
               title="Register" 
@@ -206,40 +183,6 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: '100%',
-  },
-  roleContainer: {
-    marginBottom: spacing.m,
-  },
-  roleLabel: {
-    ...typography.bodySmall,
-    color: colors.text,
-    marginBottom: spacing.xs,
-    fontWeight: '600',
-  },
-  roleButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.xs,
-  },
-  roleButton: {
-    flex: 1,
-    paddingVertical: spacing.s,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.s,
-    alignItems: 'center',
-  },
-  roleButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  roleButtonText: {
-    ...typography.caption,
-    color: colors.text,
-  },
-  roleButtonTextActive: {
-    color: colors.white,
-    fontWeight: 'bold',
   },
   registerButton: {
     marginTop: spacing.xl,

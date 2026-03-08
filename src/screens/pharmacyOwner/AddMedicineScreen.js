@@ -1,40 +1,76 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  KeyboardAvoidingView, 
-  Platform 
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useDispatch, useSelector } from 'react-redux';
 
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import Input from '../../components/Input';
 import PrimaryButton from '../../components/PrimaryButton';
+import { addMedicine } from '../../redux/slices/medicineSlice';
+import { fetchMyPharmacy } from '../../redux/slices/pharmacySlice';
 
 const AddMedicineScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const { myPharmacy } = useSelector((state) => state.pharmacy);
+  const { isLoading, error } = useSelector((state) => state.medicine);
+
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [quantity, setQuantity] = useState('');
   const [category, setCategory] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleAdd = () => {
-    setLoading(true);
-    // Mimic API call
-    setTimeout(() => {
-      setLoading(false);
-      navigation.goBack();
-    }, 1500);
+  useEffect(() => {
+    if (!myPharmacy) {
+      dispatch(fetchMyPharmacy());
+    }
+  }, [dispatch, myPharmacy]);
+
+  const handleAdd = async () => {
+    if (!name.trim() || !price.trim() || !quantity.trim()) {
+      Alert.alert('Missing Fields', 'Please fill in medicine name, price, and quantity.');
+      return;
+    }
+
+    if (!myPharmacy?._id) {
+      Alert.alert('Error', 'Pharmacy not found. Please set up your pharmacy profile first.');
+      return;
+    }
+
+    const medicineData = {
+      medicineName: name.trim(),
+      category: category.trim() || 'General',
+      price: parseFloat(price),
+      stockQuantity: parseInt(quantity, 10),
+      pharmacyId: myPharmacy._id,
+    };
+
+    try {
+      const result = await dispatch(addMedicine(medicineData)).unwrap();
+      if (result.success) {
+        Alert.alert('Success', `${name} has been added to your inventory.`, [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      }
+    } catch (err) {
+      Alert.alert('Error', err || 'Failed to add medicine. Please try again.');
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
@@ -62,7 +98,7 @@ const AddMedicineScreen = ({ navigation }) => {
             <View style={styles.row}>
               <View style={styles.col}>
                 <Input
-                  label="Price ($)"
+                  label="Price (\u20B9)"
                   placeholder="0.00"
                   value={price}
                   onChangeText={setPrice}
@@ -80,10 +116,10 @@ const AddMedicineScreen = ({ navigation }) => {
               </View>
             </View>
 
-            <PrimaryButton 
-              title="Add to Inventory" 
-              onPress={handleAdd} 
-              loading={loading}
+            <PrimaryButton
+              title="Add to Inventory"
+              onPress={handleAdd}
+              loading={isLoading}
               style={styles.btn}
             />
           </View>
@@ -92,9 +128,6 @@ const AddMedicineScreen = ({ navigation }) => {
     </SafeAreaView>
   );
 };
-
-// Added explicitly for the back button since I forgot to import TouchableOpacity from react-native
-import { TouchableOpacity } from 'react-native';
 
 const styles = StyleSheet.create({
   safeArea: {

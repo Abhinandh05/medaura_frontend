@@ -1,31 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   FlatList, 
-  TouchableOpacity 
+  TouchableOpacity,
+  Alert,
+  RefreshControl 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useSelector, useDispatch } from 'react-redux';
 
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import SearchBar from '../../components/SearchBar';
 import EmptyState from '../../components/EmptyState';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { fetchAllPharmacies, deletePharmacyAdmin } from '../../redux/slices/adminSlice';
 
 const ManagePharmaciesScreen = ({ navigation }) => {
-  const [pharmacies] = useState([
-    { id: '1', name: 'City Central Pharmacy', status: 'approved', joined: '2026-01-15' },
-    { id: '2', name: 'MediQuick Store', status: 'pending', joined: '2026-03-01' },
-    { id: '3', name: 'HealthFirst Pharma', status: 'approved', joined: '2025-12-10' },
-  ]);
+  const dispatch = useDispatch();
+  const { pharmacies, isLoading } = useSelector((state) => state.admin);
   const [search, setSearch] = useState('');
 
+  const loadPharmacies = useCallback(() => {
+    dispatch(fetchAllPharmacies());
+  }, [dispatch]);
+
+  useEffect(() => {
+    loadPharmacies();
+  }, [loadPharmacies]);
+
   const filteredPharmacies = pharmacies.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase())
+    (p.pharmacyName || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.address || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleDeletePharmacy = (pharmacy) => {
+    Alert.alert(
+      'Delete Pharmacy',
+      `Are you sure you want to delete "${pharmacy.pharmacyName}"? This will also remove all its medicines.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => dispatch(deletePharmacyAdmin(pharmacy._id)),
+        },
+      ]
+    );
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString();
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -35,6 +66,15 @@ const ManagePharmaciesScreen = ({ navigation }) => {
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Manage Pharmacies</Text>
+          <View style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>{pharmacies.length}</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('AddPharmacy')}
+          >
+            <Ionicons name="add" size={22} color={colors.white} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.searchContainer}>
@@ -45,37 +85,51 @@ const ManagePharmaciesScreen = ({ navigation }) => {
           />
         </View>
 
-        <FlatList
-          data={filteredPharmacies}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <View style={styles.pharmacyCard}>
-              <View style={styles.pharmaInfo}>
-                <Text style={styles.pharmaName}>{item.name}</Text>
-                <Text style={styles.pharmaJoinDate}>Joined: {item.joined}</Text>
-                <View style={[styles.statusBadge, item.status === 'approved' ? styles.statusApproved : styles.statusPending]}>
-                  <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+        {isLoading && pharmacies.length === 0 ? (
+          <LoadingSpinner />
+        ) : (
+          <FlatList
+            data={filteredPharmacies}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={isLoading} onRefresh={loadPharmacies} colors={[colors.primary]} />
+            }
+            renderItem={({ item }) => (
+              <View style={styles.pharmacyCard}>
+                <View style={styles.pharmaInfo}>
+                  <Text style={styles.pharmaName}>{item.pharmacyName}</Text>
+                  <Text style={styles.pharmaDetail}>{item.address}</Text>
+                  {item.phone && <Text style={styles.pharmaDetail}>Phone: {item.phone}</Text>}
+                  <Text style={styles.pharmaJoinDate}>Joined: {formatDate(item.createdAt)}</Text>
+                  {item.ownerId && (
+                    <View style={styles.ownerBadge}>
+                      <Ionicons name="person-outline" size={12} color={colors.primary} />
+                      <Text style={styles.ownerText}>
+                        {item.ownerId.name || 'Unknown Owner'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.actions}>
+                  <TouchableOpacity 
+                    style={styles.deleteBtn}
+                    onPress={() => handleDeletePharmacy(item)}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={colors.red} />
+                  </TouchableOpacity>
                 </View>
               </View>
-              <View style={styles.actions}>
-                <TouchableOpacity style={styles.editBtn}>
-                   <Ionicons name="create-outline" size={20} color={colors.textLight} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.deleteBtn}>
-                   <Ionicons name="trash-outline" size={20} color={colors.red} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-          ListEmptyComponent={
-            <EmptyState
-              title="No Pharmacies"
-              message="No pharmacy listings found."
-              iconName="business-outline"
-            />
-          }
-        />
+            )}
+            ListEmptyComponent={
+              <EmptyState
+                title="No Pharmacies"
+                message={search ? 'No pharmacies match your search.' : 'No pharmacy listings found.'}
+                iconName="business-outline"
+              />
+            }
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -102,12 +156,27 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h3,
     color: colors.text,
+    flex: 1,
+  },
+  headerBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: spacing.s,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  headerBadgeText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: 'bold',
   },
   searchContainer: {
     padding: spacing.m,
   },
   listContent: {
     padding: spacing.m,
+    flexGrow: 1,
   },
   pharmacyCard: {
     flexDirection: 'row',
@@ -128,33 +197,43 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
+  pharmaDetail: {
+    ...typography.caption,
+    color: colors.textLight,
+    marginTop: 2,
+  },
   pharmaJoinDate: {
     ...typography.caption,
     color: colors.textLight,
-    marginBottom: spacing.s,
+    marginTop: 2,
+    marginBottom: spacing.xs,
   },
-  statusBadge: {
+  ownerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
+    backgroundColor: '#E6F4F1',
     paddingHorizontal: spacing.s,
     paddingVertical: 2,
     borderRadius: spacing.s,
+    gap: 4,
   },
-  statusApproved: {
-    backgroundColor: '#DEF7EC',
-  },
-  statusPending: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusText: {
+  ownerText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: colors.text,
+    color: colors.primary,
   },
   actions: {
     flexDirection: 'row',
   },
-  editBtn: {
-    padding: spacing.s,
+  addBtn: {
+    backgroundColor: colors.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.s,
   },
   deleteBtn: {
     padding: spacing.s,

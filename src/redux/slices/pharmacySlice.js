@@ -70,10 +70,18 @@ const pharmacySlice = createSlice({
     stats: {
       totalMedicines: 0,
       lowStock: 0,
-      dailyViews: 0,
+      outOfStock: 0,
+      totalOrders: 0,
+      pendingOrders: 0,
+      completedOrders: 0,
+      todayOrders: 0,
+      totalRevenue: 0,
+      todayRevenue: 0,
+      recentOrders: [],
       activity: []
     },
     isLoading: false,
+    statsLoading: false,
     error: null,
   },
   reducers: {
@@ -132,8 +140,15 @@ const pharmacySlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
+      .addCase(fetchPharmacyStats.pending, (state) => {
+        state.statsLoading = true;
+      })
       .addCase(fetchPharmacyStats.fulfilled, (state, action) => {
+        state.statsLoading = false;
         state.stats = action.payload;
+      })
+      .addCase(fetchPharmacyStats.rejected, (state) => {
+        state.statsLoading = false;
       });
   },
 });

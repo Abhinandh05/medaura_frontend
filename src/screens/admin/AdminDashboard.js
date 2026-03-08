@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   ScrollView, 
   TouchableOpacity,
-  Image 
+  Image,
+  RefreshControl,
+  ActivityIndicator 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,15 +17,30 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { signOut } from '../../redux/slices/authSlice';
+import { fetchAdminStats } from '../../redux/slices/adminSlice';
 
 const AdminDashboard = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { stats, isLoading } = useSelector((state) => state.admin);
+
+  const loadStats = useCallback(() => {
+    dispatch(fetchAdminStats());
+  }, [dispatch]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  const formatNumber = (num) => {
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(num);
+  };
 
   const systemStats = [
-    { label: 'Total Users', value: '1,240', icon: 'people', color: '#E0E7FF' },
-    { label: 'Pharmacies', value: '85', icon: 'business', color: '#E6F4F1' },
-    { label: 'Active Searches', value: '3.5k', icon: 'search', color: '#FEF3C7' },
+    { label: 'Total Users', value: formatNumber(stats.totalUsers), icon: 'people', color: '#E0E7FF' },
+    { label: 'Pharmacies', value: formatNumber(stats.totalPharmacies), icon: 'business', color: '#E6F4F1' },
+    { label: 'Orders', value: formatNumber(stats.totalOrders), icon: 'cart', color: '#FEF3C7' },
   ];
 
   const handleLogout = () => {
@@ -32,7 +49,13 @@ const AdminDashboard = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.container} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isLoading} onRefresh={loadStats} colors={[colors.primary]} />
+        }
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.welcomeText}>System Administrator</Text>

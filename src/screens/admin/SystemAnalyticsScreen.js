@@ -1,19 +1,43 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   ScrollView, 
-  TouchableOpacity 
+  TouchableOpacity,
+  RefreshControl 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useSelector, useDispatch } from 'react-redux';
 
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { fetchAnalytics } from '../../redux/slices/adminSlice';
 
 const SystemAnalyticsScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const { analytics, isLoading } = useSelector((state) => state.admin);
+
+  const loadAnalytics = useCallback(() => {
+    dispatch(fetchAnalytics());
+  }, [dispatch]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
+
+  const formatNumber = (num) => {
+    if (!num && num !== 0) return '0';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(num);
+  };
+
+  const growthPercent = analytics?.userGrowth?.growthPercent || 0;
+  const isPositiveGrowth = growthPercent >= 0;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -23,51 +47,93 @@ const SystemAnalyticsScreen = ({ navigation }) => {
         <Text style={styles.headerTitle}>System Analytics</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.chartPlaceholder}>
-          <Text style={styles.chartTitle}>Daily Medicine Searches</Text>
-          <View style={styles.visualPlaceholder}>
-             {/* This would be a real chart component in a production app */}
-             <Ionicons name="stats-chart" size={100} color={colors.accent} />
-             <Text style={styles.placeholderText}>Search Volume visualization over last 30 days</Text>
+      {isLoading && !analytics ? (
+        <LoadingSpinner />
+      ) : (
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isLoading} onRefresh={loadAnalytics} colors={[colors.primary]} />
+          }
+        >
+          <View style={styles.chartPlaceholder}>
+            <Text style={styles.chartTitle}>Order Summary (Last 30 days)</Text>
+            <View style={styles.visualPlaceholder}>
+              <Ionicons name="stats-chart" size={80} color={colors.primary} />
+              <Text style={styles.placeholderText}>
+                {analytics?.recentOrders || 0} orders placed in the last 30 days
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.reportGrid}>
-          <View style={styles.reportItem}>
-             <Text style={styles.reportValue}>8,240</Text>
-             <Text style={styles.reportLabel}>Total Searches</Text>
+          <View style={styles.reportGrid}>
+            <View style={styles.reportItem}>
+              <Text style={styles.reportValue}>{formatNumber(analytics?.recentOrders)}</Text>
+              <Text style={styles.reportLabel}>Recent Orders</Text>
+            </View>
+            <View style={styles.reportItem}>
+              <Text style={styles.reportValue}>
+                {analytics?.totalRevenue ? `₹${formatNumber(analytics.totalRevenue)}` : '₹0'}
+              </Text>
+              <Text style={styles.reportLabel}>Revenue (30d)</Text>
+            </View>
           </View>
-          <View style={styles.reportItem}>
-             <Text style={styles.reportValue}>94%</Text>
-             <Text style={styles.reportLabel}>Success Rate</Text>
-          </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top Searched Medicines</Text>
-          <View style={styles.tableRow}>
-            <Text style={styles.tableName}>1. Paracetamol</Text>
-            <Text style={styles.tableValue}>1,250</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Top Medicines (by availability)</Text>
+            {analytics?.topMedicines && analytics.topMedicines.length > 0 ? (
+              analytics.topMedicines.map((med) => (
+                <View key={med.name} style={styles.tableRow}>
+                  <Text style={styles.tableName}>{med.rank}. {med.name}</Text>
+                  <Text style={styles.tableValue}>
+                    {med.pharmacyCount} {med.pharmacyCount === 1 ? 'pharmacy' : 'pharmacies'}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noDataText}>No medicine data available yet.</Text>
+            )}
           </View>
-          <View style={styles.tableRow}>
-            <Text style={styles.tableName}>2. Amoxicillin</Text>
-            <Text style={styles.tableValue}>840</Text>
-          </View>
-          <View style={styles.tableRow}>
-            <Text style={styles.tableName}>3. Aspirin</Text>
-            <Text style={styles.tableValue}>720</Text>
-          </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>User Growth</Text>
-          <View style={styles.visualPlaceholderSmall}>
-             <Ionicons name="trending-up" size={40} color={colors.primary} />
-             <Text style={styles.placeholderTextSmall}>+15% user growth this month</Text>
+          {analytics?.ordersByStatus && Object.keys(analytics.ordersByStatus).length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Orders by Status</Text>
+              {Object.entries(analytics.ordersByStatus).map(([status, count]) => (
+                <View key={status} style={styles.tableRow}>
+                  <Text style={styles.tableName}>{status}</Text>
+                  <Text style={styles.tableValue}>{count}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>User Growth</Text>
+            <View style={[
+              styles.visualPlaceholderSmall, 
+              { backgroundColor: isPositiveGrowth ? '#DEF7EC' : '#FEE2E2' }
+            ]}>
+              <Ionicons 
+                name={isPositiveGrowth ? 'trending-up' : 'trending-down'} 
+                size={40} 
+                color={isPositiveGrowth ? colors.primary : '#EF4444'} 
+              />
+              <View style={styles.growthTextContainer}>
+                <Text style={[
+                  styles.placeholderTextSmall, 
+                  { color: isPositiveGrowth ? colors.primary : '#EF4444' }
+                ]}>
+                  {isPositiveGrowth ? '+' : ''}{growthPercent}% user growth this month
+                </Text>
+                <Text style={styles.growthDetail}>
+                  {analytics?.userGrowth?.recentUsers || 0} new users (vs {analytics?.userGrowth?.previousUsers || 0} previous month)
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -177,7 +243,21 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.primary,
     fontWeight: 'bold',
+  },
+  noDataText: {
+    ...typography.body,
+    color: colors.textLight,
+    textAlign: 'center',
+    paddingVertical: spacing.l,
+  },
+  growthTextContainer: {
+    flex: 1,
     marginLeft: spacing.m,
+  },
+  growthDetail: {
+    ...typography.caption,
+    color: colors.textLight,
+    marginTop: 2,
   },
 });
 

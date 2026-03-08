@@ -41,7 +41,7 @@ const initialState = {
   token: null,
   user: null,
   role: null,
-  isLoading: true,
+  isLoading: false,
   error: null,
 };
 
