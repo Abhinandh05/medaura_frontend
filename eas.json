@@ -12,14 +12,16 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://medaura-backend.vercel.app/api",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51T8E7ULzGOMIdFyYB5nBEd8GG8wVixrHVu1wFUOvQllwgdTLAqYj953zLxIEl3CnZU058dW10EFm9SiSUxrJLqlD00OPmpCPXF"
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51T8E7ULzGOMIdFyYB5nBEd8GG8wVixrHVu1wFUOvQllwgdTLAqYj953zLxIEl3CnZU058dW10EFm9SiSUxrJLqlD00OPmpCPXF",
+        "NODE_OPTIONS": "--max-old-space-size=4096"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://medaura-backend.vercel.app/api",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51T8E7ULzGOMIdFyYB5nBEd8GG8wVixrHVu1wFUOvQllwgdTLAqYj953zLxIEl3CnZU058dW10EFm9SiSUxrJLqlD00OPmpCPXF"
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51T8E7ULzGOMIdFyYB5nBEd8GG8wVixrHVu1wFUOvQllwgdTLAqYj953zLxIEl3CnZU058dW10EFm9SiSUxrJLqlD00OPmpCPXF",
+        "NODE_OPTIONS": "--max-old-space-size=4096"
       }
     }
   },
